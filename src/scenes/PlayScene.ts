@@ -4,7 +4,8 @@ import { Hitstop } from '../combat/Hitstop';
 import { Player } from '../entities/Player';
 import { Grunt } from '../entities/Grunt';
 import { Hud } from '../ui/Hud';
-import { cultivationTotal, isSkillUnlocked, loadSave, persistProgress, unlockSkill, type SaveV1Data } from '../save/SaveV1';
+import { ResultOverlay } from '../ui/ResultOverlay';
+import { cultivationTotal, isSkillUnlocked, loadSave, persistProgress, rematchSave, settlementView, unlockSkill, type SaveV1Data } from '../save/SaveV1';
 
 const ROOM_W = STAGE.roomWidth;
 const WORLD_W = ROOM_W * 3;
@@ -15,6 +16,7 @@ export class PlayScene extends Phaser.Scene {
   private foes: Grunt[] = [];
   private hitstop!: Hitstop;
   private hud!: Hud;
+  private result!: ResultOverlay;
   private platforms!: Phaser.Physics.Arcade.StaticGroup;
   private lastReal = 0;
   private save!: SaveV1Data;
@@ -53,10 +55,15 @@ export class PlayScene extends Phaser.Scene {
     this.cameras.main.setDeadzone(36, 48);
     this.cameras.main.setFollowOffset(-this.player.facing * 90, 24);
 
-    this.hud = new Hud(this);
+    const total0 = cultivationTotal(this.save.cultivation);
+    this.hud = new Hud(this, total0);
+    this.result = new ResultOverlay(this, () => this.rematch());
     this.input.keyboard!.on('keydown-R', () => {
-      this.save.checkpoint = { stageId: this.save.checkpoint.stageId, spawnId: 'start' };
-      this.save.stageProgress = { stageId: this.save.checkpoint.stageId, cleared: false };
+      if (this.result.open) {
+        return;
+      }
+      this.save.checkpoint = { stageId: 'slice_01', spawnId: 'start' };
+      this.save.stageProgress = { stageId: 'slice_01', cleared: false };
       this.save.cultivation = { kill: 0, clear: 0, boss: 0 };
       this.commitSave();
       this.scene.restart();
@@ -71,15 +78,17 @@ export class PlayScene extends Phaser.Scene {
     this.lastReal = now;
     this.hitstop.update(realDelta);
 
-    this.player.update(now, realDelta);
-    for (const foe of this.foes) {
-      foe.update(realDelta, this.player.sprite.x, this.player.alive);
+    if (!this.result.open) {
+      this.player.update(now, realDelta);
+      for (const foe of this.foes) {
+        foe.update(realDelta, this.player.sprite.x, this.player.alive);
+      }
+      this.resolvePlayerHits();
+      this.resolveEnemyHits();
+      this.tickRooms();
     }
     this.cameras.main.setFollowOffset(-this.player.facing * 90, 24);
 
-    this.resolvePlayerHits();
-    this.resolveEnemyHits();
-    this.tickRooms();
     const total = cultivationTotal(this.save.cultivation);
     this.hud.refresh(
       this.player,
@@ -89,6 +98,9 @@ export class PlayScene extends Phaser.Scene {
       isSkillUnlocked(this.save, 'skill_1'),
       isSkillUnlocked(this.save, 'slash_1'),
     );
+    if (this.save.stageProgress.cleared && this.player.alive && !this.result.open) {
+      this.result.show(settlementView(this.save));
+    }
   }
 
   private focusedFoe(): Grunt {
@@ -183,6 +195,11 @@ export class PlayScene extends Phaser.Scene {
         this.commitSave();
       }
     });
+  }
+
+  private rematch(): void {
+    this.save = rematchSave(this.save);
+    this.scene.restart();
   }
 
   private commitSave(): void {
