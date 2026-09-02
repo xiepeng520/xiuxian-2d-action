@@ -49,7 +49,23 @@ export const ENEMY = {
   flashMs: 33,
 } as const;
 
+export const BOSS = {
+  maxHp: 160,
+  speed: 55,
+  bodyWidth: 36,
+  bodyHeight: 80,
+  attackRange: 170,
+  attackDamage: 18,
+  windupMs: 420,
+  activeMs: 180,
+  recoverMs: 520,
+  flashMs: 33,
+  stunScale: 0.5,
+} as const;
+
 export const STAGE = {
   killCultivation: 8,
   clearCultivation: 15,
+  bossCultivation: 40,
+  roomWidth: 1280,
 } as const;

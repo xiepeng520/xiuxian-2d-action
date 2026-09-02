@@ -6,10 +6,10 @@
  * the catalog. Disk blobs omit `skills[]`; a leftover array in old blobs is
  * ignored (list still wins).
  *
- * Cultivation this knife is two integers only: `cultivation.kill` and
- * `cultivation.clear`. They are not a skill tree. Missing fields on old v1
- * blobs default to 0 / not-cleared. Unknown saveVersion still refuses and
- * does not clobber live.
+ * Cultivation is three integers: `kill` (grunt +8), `clear` (room +15),
+ * `boss` (gate kill +40, only when that foe dies). Not a skill tree.
+ * Missing fields on old v1 blobs default to 0. Unknown saveVersion still
+ * refuses and does not clobber live.
  *
  * Atomic write: JSON goes to `xiuxian.save.v1.tmp` first, then the live key
  * `xiuxian.save.v1`, then the tmp key is dropped. If the live write throws,
@@ -44,6 +44,7 @@ export interface CheckpointV1 {
 export interface CultivationV1 {
   kill: number;
   clear: number;
+  boss: number;
 }
 
 export interface StageProgressV1 {
@@ -124,14 +125,14 @@ function asInt(value: unknown, fallback = 0): number {
 }
 
 export function cultivationTotal(cultivation: CultivationV1): number {
-  return cultivation.kill + cultivation.clear;
+  return cultivation.kill + cultivation.clear + cultivation.boss;
 }
 
 export function assembleSave(
   character: CharacterV1,
   checkpoint: CheckpointV1,
   unlockedSkillIds: readonly string[],
-  cultivation: CultivationV1 = { kill: 0, clear: 0 },
+  cultivation: CultivationV1 = { kill: 0, clear: 0, boss: 0 },
   stageProgress: StageProgressV1 = { stageId: checkpoint.stageId, cleared: false },
 ): SaveV1Data {
   const ids = [...unlockedSkillIds];
@@ -140,7 +141,11 @@ export function assembleSave(
     character: { hp: character.hp, atk: character.atk },
     checkpoint: { stageId: checkpoint.stageId, spawnId: checkpoint.spawnId },
     stageProgress: { stageId: stageProgress.stageId, cleared: !!stageProgress.cleared },
-    cultivation: { kill: asInt(cultivation.kill), clear: asInt(cultivation.clear) },
+    cultivation: {
+      kill: asInt(cultivation.kill),
+      clear: asInt(cultivation.clear),
+      boss: asInt(cultivation.boss),
+    },
     unlockedSkillIds: ids,
     skills: hydrateSkills(ids),
   };
@@ -150,7 +155,7 @@ export const DEFAULT_SAVE: SaveV1Data = assembleSave(
   { hp: 100, atk: 10 },
   { stageId: 'slice_01', spawnId: 'start' },
   DEFAULT_UNLOCKED,
-  { kill: 0, clear: 0 },
+  { kill: 0, clear: 0, boss: 0 },
   { stageId: 'slice_01', cleared: false },
 );
 
@@ -182,6 +187,7 @@ function parseSave(raw: string): SaveV1Data | null {
     const cultivation: CultivationV1 = {
       kill: asInt(data.cultivation?.kill),
       clear: asInt(data.cultivation?.clear),
+      boss: asInt(data.cultivation?.boss),
     };
     const stageProgress: StageProgressV1 = {
       stageId:
@@ -269,7 +275,7 @@ export function saveSave(data: SaveV1Data, store?: Storage | null): boolean {
     data.character,
     data.checkpoint,
     data.unlockedSkillIds,
-    data.cultivation ?? { kill: 0, clear: 0 },
+    data.cultivation ?? { kill: 0, clear: 0, boss: 0 },
     data.stageProgress ?? { stageId: data.checkpoint.stageId, cleared: false },
   );
   const json = JSON.stringify(toDiskBlob(payload));
