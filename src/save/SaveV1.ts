@@ -396,3 +396,23 @@ export function skillById(save: SaveV1Data, skillId: string): SkillV1 | undefine
 export function isSkillUnlocked(save: SaveV1Data, skillId: string): boolean {
   return save.unlockedSkillIds.includes(skillId);
 }
+
+/** Read-only clear summary. Does not write. */
+export function settlementView(save: SaveV1Data): { total: number; realm: 1 | 2 | 3 } {
+  const total = cultivationTotal(save.cultivation);
+  const realm: 1 | 2 | 3 = total >= SLASH_AT ? 3 : total >= SKILL_1_AT ? 2 : 1;
+  return { total, realm };
+}
+
+/** Same run again: full hp, slice_01/start. Cultivation and unlocks kept. */
+export function rematchSave(save: SaveV1Data, store?: Storage | null): SaveV1Data {
+  const next = assembleSave(
+    { hp: 100, atk: save.character.atk },
+    { stageId: 'slice_01', spawnId: 'start' },
+    save.unlockedSkillIds,
+    save.cultivation,
+    { stageId: 'slice_01', cleared: false },
+  );
+  saveSave(next, store ?? undefined);
+  return next;
+}

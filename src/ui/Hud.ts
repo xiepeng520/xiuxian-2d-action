@@ -18,8 +18,10 @@ export class Hud {
   private lastRealm = 1;
   private flashUntil = 0;
 
-  constructor(scene: Phaser.Scene) {
+  constructor(scene: Phaser.Scene, initialTotal = 0) {
     this.scene = scene;
+    this.lastRealm = realmFromTotal(initialTotal);
+
     const ui = scene.add.container(0, 0).setScrollFactor(0).setDepth(100);
 
     const panel = scene.add.rectangle(24, 20, 320, 96, 0x0b0814, 0.72).setOrigin(0, 0);
@@ -163,8 +165,8 @@ export class Hud {
       this.banner.setText('身陨');
       this.hint.setText('按 R 重开此关');
     } else if (cleared) {
-      this.banner.setText('清场');
-      this.hint.setText('关卡闭环完成 · 按 R 再打一场');
+      this.banner.setText('');
+      this.hint.setText('Enter 再战');
     } else {
       this.banner.setText('');
       this.hint.setText(controls);
