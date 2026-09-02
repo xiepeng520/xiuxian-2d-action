@@ -99,7 +99,7 @@ export class Hud {
     this.dummyLabel.setText(dummy.dead ? '木桩 · 已破' : '木桩');
     this.hint.setText(
       player.state === 'dead'
-        ? '你已身殃 — 按 R 重开此切片'
+        ? '你已身陨 — 按 R 重开此切片'
         : 'WASD / 方向键 移动   空格 跳   J 轻击   K 重击   R 重开',
     );
   }
