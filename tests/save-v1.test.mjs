@@ -9,7 +9,9 @@ import {
   isSkillUnlocked,
   loadSave,
   persistProgress,
+  rematchSave,
   saveSave,
+  settlementView,
   unlockSkill,
   SKILL_CATALOG,
 } from '../.test-out/save/SaveV1.js';
@@ -278,5 +280,34 @@ test('total >= 160 writes slash_1/2/3 once; existing ids unchanged', () => {
   assert.deepEqual(slash.map((s) => s.hitstopMs), [70, 70, 100]);
   const light1 = SKILL_CATALOG.find((s) => s.skillId === 'light_1');
   assert.equal(light1.damage, 12);
+});
+test('settlementView is read-only; rematch keeps cultivation and unlocks', () => {
+  const store = new MemoryStorage();
+  const start = persistProgress({
+    ...DEFAULT_SAVE,
+    cultivation: { kill: 32, clear: 30, boss: 40 },
+    unlockedSkillIds: ['light_1', 'light_2', 'light_3', 'heavy_1', 'skill_1'],
+    character: { hp: 12, atk: 10 },
+    checkpoint: { stageId: 'slice_01', spawnId: 'gate' },
+    stageProgress: { stageId: 'slice_01', cleared: true },
+  }, store);
+  const before = JSON.parse(store.getItem(LIVE_KEY));
+  const view = settlementView(start);
+  assert.equal(view.total, 102);
+  assert.equal(view.realm, 2);
+  assert.deepEqual(JSON.parse(store.getItem(LIVE_KEY)), before);
+
+  const next = rematchSave(start, store);
+  assert.equal(next.character.hp, 100);
+  assert.deepEqual(next.checkpoint, { stageId: 'slice_01', spawnId: 'start' });
+  assert.deepEqual(next.cultivation, { kill: 32, clear: 30, boss: 40 });
+  assert.equal(next.unlockedSkillIds.includes('skill_1'), true);
+  assert.equal(next.unlockedSkillIds.includes('slash_1'), false);
+  assert.equal(next.stageProgress.cleared, false);
+  const live = JSON.parse(store.getItem(LIVE_KEY));
+  assert.equal(Object.hasOwn(live, 'realm'), false);
+  assert.equal(Object.hasOwn(live, 'clears'), false);
+  assert.equal(live.character.hp, 100);
+  assert.deepEqual(live.cultivation, { kill: 32, clear: 30, boss: 40 });
 });
 
