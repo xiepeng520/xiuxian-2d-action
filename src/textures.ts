@@ -29,6 +29,7 @@ export function createPlaceholderTextures(scene: Phaser.Scene): void {
   drawSlash(g, 'slash-heavy', 0xffd27a, 110);
   drawPlayer(g, 'player', 0x6fd6c8, 0x1c3140);
   drawEnemy(g, 'dummy', 0x8a5a4a, 0x3a241c);
+  drawEnemy(g, 'grunt', 0x6b3a2a, 0x3a1c14);
   drawSlash(g, 'slash', 0x7ee7ff, 88);
 
   g.fillStyle(0x14101c, 1);
@@ -62,6 +63,7 @@ export function createPlaceholderTextures(scene: Phaser.Scene): void {
   tex(g, 'spark', 8, 8);
   drawPlayer(g, 'player', 0x6fd6c8, 0x1c3140);
   drawEnemy(g, 'dummy', 0x8a5a4a, 0x3a241c);
+  drawEnemy(g, 'grunt', 0x6b3a2a, 0x3a1c14);
   drawSlash(g, 'slash', 0x7ee7ff, 78);
 
   g.destroy();
@@ -86,20 +88,23 @@ function drawPlayer(g: Phaser.GameObjects.Graphics, key: string, cloth: number, 
   tex(g, key, 64, 88);
 }
 
-function drawEnemy(g: Phaser.GameObjects.Graphics, key: string, wood: number, dark: number): void {
-  g.fillStyle(dark, 1);
-  g.fillRoundedRect(16, 22, 32, 52, 4);
-  g.fillStyle(wood, 1);
-  g.fillRoundedRect(18, 18, 28, 48, 4);
-  g.fillStyle(0x2a1810, 1);
-  g.fillRect(24, 28, 6, 6);
-  g.fillRect(36, 28, 6, 6);
-  g.fillStyle(0x6a2018, 0.8);
-  g.fillRect(26, 42, 16, 4);
-  g.fillStyle(0x704838, 1);
-  g.fillRect(12, 36, 10, 8);
-  g.fillRect(42, 36, 10, 8);
-  tex(g, key, 64, 84);
+function drawEnemy(g: Phaser.GameObjects.Graphics, key: string, fill: number, shade: number): void {
+  const w = 80;
+  const h = 58;
+  g.fillStyle(0x000000, 0);
+  g.fillRect(0, 0, w, h);
+  g.lineStyle(3, 0xf0d7a0, 1);
+  g.strokeRoundedRect(4, 8, 72, 46, 6);
+  g.fillStyle(shade, 1);
+  g.fillRoundedRect(6, 10, 68, 44, 5);
+  g.fillStyle(fill, 1);
+  g.fillRoundedRect(8, 12, 64, 40, 5);
+  g.fillStyle(0x1a0c08, 1);
+  g.fillRect(24, 22, 8, 6);
+  g.fillRect(48, 22, 8, 6);
+  g.fillStyle(0x3a1810, 1);
+  g.fillRect(30, 34, 20, 5);
+  tex(g, key, w, h);
 }
 
 function drawSlash(g: Phaser.GameObjects.Graphics, key: string, color: number, w: number): void {

@@ -49,7 +49,6 @@ export class Player {
   private hurtMs = 0;
   private comboIdleMs = 0;
   private slash: Phaser.GameObjects.Image;
-  private readonly atkScale: number;
   /** Combat-time clock: paused while scene.time.timeScale === 0 (hitstop). */
   private combatClock = 0;
 
@@ -59,8 +58,6 @@ export class Player {
     this.buffer = new ComboBuffer(COMBAT.bufferMs);
     this.maxHp = save.character.hp || PLAYER.maxHp;
     this.hp = this.maxHp;
-    this.atkScale = save.character.atk / 10;
-
     this.sprite = scene.physics.add.sprite(x, y, 'player');
     this.sprite.setDepth(10);
     this.body = this.sprite.body as Phaser.Physics.Arcade.Body;
@@ -298,7 +295,7 @@ export class Player {
       duration: cfg.duration,
       activeStart: cfg.activeStart,
       activeEnd: cfg.activeEnd,
-      damage: this.scaledDamage(skill?.damage ?? cfg.damage),
+      damage: skill?.damage ?? cfg.damage,
       knockback: cfg.knockback,
       hitstop: skill?.hitstopMs ?? cfg.hitstop,
       stun: skill?.stun ?? (action === 'heavy' ? 220 : 80),
@@ -347,10 +344,6 @@ export class Player {
 
   private firstUnlocked(input: 'light' | 'heavy'): SkillV1 | undefined {
     return this.save.skills.find((s) => s.input === input && isSkillUnlocked(this.save, s.skillId));
-  }
-
-  private scaledDamage(base: number): number {
-    return Math.round(base * this.atkScale);
   }
 
   private readAxis(): number {

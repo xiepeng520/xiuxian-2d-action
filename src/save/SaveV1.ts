@@ -5,6 +5,11 @@
  * catalog: writes never mutate its structure; load hydrates `unlock` from the
  * id list (list wins if they disagree).
  *
+ * Cultivation this knife is two integers only: `cultivation.kill` and
+ * `cultivation.clear`. They are not a skill tree. Missing fields on old v1
+ * blobs default to 0 / not-cleared. Unknown saveVersion still refuses and
+ * does not clobber live.
+ *
  * Atomic write: JSON goes to `xiuxian.save.v1.tmp` first, then the live key
  * `xiuxian.save.v1`, then the tmp key is dropped. If the live write throws,
  * the previous live blob is left intact and tmp is kept for recovery.
@@ -35,10 +40,22 @@ export interface CheckpointV1 {
   spawnId: string;
 }
 
+export interface CultivationV1 {
+  kill: number;
+  clear: number;
+}
+
+export interface StageProgressV1 {
+  stageId: string;
+  cleared: boolean;
+}
+
 export interface SaveV1Data {
   saveVersion: 1;
   character: CharacterV1;
   checkpoint: CheckpointV1;
+  stageProgress: StageProgressV1;
+  cultivation: CultivationV1;
   unlockedSkillIds: string[];
   skills: SkillV1[];
 }
@@ -101,16 +118,28 @@ export function hydrateSkills(unlockedSkillIds: readonly string[]): SkillV1[] {
   }));
 }
 
+function asInt(value: unknown, fallback = 0): number {
+  return typeof value === 'number' && Number.isFinite(value) ? value : fallback;
+}
+
+export function cultivationTotal(cultivation: CultivationV1): number {
+  return cultivation.kill + cultivation.clear;
+}
+
 export function assembleSave(
   character: CharacterV1,
   checkpoint: CheckpointV1,
   unlockedSkillIds: readonly string[],
+  cultivation: CultivationV1 = { kill: 0, clear: 0 },
+  stageProgress: StageProgressV1 = { stageId: checkpoint.stageId, cleared: false },
 ): SaveV1Data {
   const ids = [...unlockedSkillIds];
   return {
     saveVersion: 1,
     character: { hp: character.hp, atk: character.atk },
     checkpoint: { stageId: checkpoint.stageId, spawnId: checkpoint.spawnId },
+    stageProgress: { stageId: stageProgress.stageId, cleared: !!stageProgress.cleared },
+    cultivation: { kill: asInt(cultivation.kill), clear: asInt(cultivation.clear) },
     unlockedSkillIds: ids,
     skills: hydrateSkills(ids),
   };
@@ -120,6 +149,8 @@ export const DEFAULT_SAVE: SaveV1Data = assembleSave(
   { hp: 100, atk: 10 },
   { stageId: 'slice_01', spawnId: 'start' },
   DEFAULT_UNLOCKED,
+  { kill: 0, clear: 0 },
+  { stageId: 'slice_01', cleared: false },
 );
 
 function catalogHas(skillId: string): boolean {
@@ -146,7 +177,18 @@ function parseSave(raw: string): SaveV1Data | null {
       return null;
     }
     const ids = data.unlockedSkillIds.filter((id) => catalogHas(id));
-    return assembleSave(data.character, data.checkpoint, ids);
+    const cultivation: CultivationV1 = {
+      kill: asInt(data.cultivation?.kill),
+      clear: asInt(data.cultivation?.clear),
+    };
+    const stageProgress: StageProgressV1 = {
+      stageId:
+        typeof data.stageProgress?.stageId === 'string'
+          ? data.stageProgress.stageId
+          : data.checkpoint.stageId,
+      cleared: data.stageProgress?.cleared === true,
+    };
+    return assembleSave(data.character, data.checkpoint, ids, cultivation, stageProgress);
   } catch {
     return null;
   }
@@ -167,7 +209,13 @@ export function storage(store?: Storage | null): Storage | null {
 }
 
 function emptySave(): SaveV1Data {
-  return assembleSave(DEFAULT_SAVE.character, DEFAULT_SAVE.checkpoint, DEFAULT_SAVE.unlockedSkillIds);
+  return assembleSave(
+    DEFAULT_SAVE.character,
+    DEFAULT_SAVE.checkpoint,
+    DEFAULT_SAVE.unlockedSkillIds,
+    DEFAULT_SAVE.cultivation,
+    DEFAULT_SAVE.stageProgress,
+  );
 }
 
 export function loadSave(store?: Storage | null): SaveV1Data {
@@ -181,6 +229,8 @@ export function loadSave(store?: Storage | null): SaveV1Data {
     if (parsed) {
       return parsed;
     }
+    // Live blob exists but is unreadable or a foreign version: refuse and
+    // do not clobber it. Session continues on an in-memory default.
     return emptySave();
   }
   const tmp = s.getItem(TMP_KEY);
@@ -190,7 +240,7 @@ export function loadSave(store?: Storage | null): SaveV1Data {
       try {
         s.setItem(LIVE_KEY, JSON.stringify(parsed));
       } catch {
-        // keep tmp
+        // keep tmp; caller still gets a usable save
       }
       return parsed;
     }
@@ -208,7 +258,13 @@ export function saveSave(data: SaveV1Data, store?: Storage | null): boolean {
   if (data.saveVersion !== SAVE_VERSION) {
     return false;
   }
-  const payload = assembleSave(data.character, data.checkpoint, data.unlockedSkillIds);
+  const payload = assembleSave(
+    data.character,
+    data.checkpoint,
+    data.unlockedSkillIds,
+    data.cultivation ?? { kill: 0, clear: 0 },
+    data.stageProgress ?? { stageId: data.checkpoint.stageId, cleared: false },
+  );
   const json = JSON.stringify(payload);
   try {
     s.setItem(TMP_KEY, json);
@@ -232,7 +288,25 @@ export function unlockSkill(save: SaveV1Data, skillId: string, store?: Storage |
   if (!catalogHas(skillId) || save.unlockedSkillIds.includes(skillId)) {
     return save;
   }
-  const next = assembleSave(save.character, save.checkpoint, [...save.unlockedSkillIds, skillId]);
+  const next = assembleSave(
+    save.character,
+    save.checkpoint,
+    [...save.unlockedSkillIds, skillId],
+    save.cultivation,
+    save.stageProgress,
+  );
+  saveSave(next, store ?? undefined);
+  return next;
+}
+
+export function persistProgress(save: SaveV1Data, store?: Storage | null): SaveV1Data {
+  const next = assembleSave(
+    save.character,
+    save.checkpoint,
+    save.unlockedSkillIds,
+    save.cultivation,
+    save.stageProgress,
+  );
   saveSave(next, store ?? undefined);
   return next;
 }

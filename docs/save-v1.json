@@ -59,5 +59,13 @@
       "stun": 220,
       "animId": "heavy_1"
     }
-  ]
+  ],
+  "stageProgress": {
+    "stageId": "slice_01",
+    "cleared": false
+  },
+  "cultivation": {
+    "kill": 0,
+    "clear": 0
+  }
 }
