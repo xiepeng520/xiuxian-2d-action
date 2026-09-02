@@ -11,6 +11,7 @@ import {
   persistProgress,
   saveSave,
   unlockSkill,
+  SKILL_CATALOG,
 } from '../.test-out/save/SaveV1.js';
 
 class MemoryStorage {
@@ -203,7 +204,8 @@ test('old blob skills[] is ignored; list and catalog win', () => {
   const heavy = loaded.skills.find((s) => s.skillId === 'heavy_1');
   assert.equal(heavy.unlock, false);
   assert.equal(heavy.damage, 32);
-  assert.equal(loaded.skills.some((s) => s.skillId === 'skill_1'), false);
+  assert.equal(loaded.skills.some((s) => s.skillId === 'skill_1'), true);
+  assert.equal(isSkillUnlocked(loaded, 'skill_1'), false);
 });
 test('old blob missing cultivation.boss defaults to 0', () => {
   const store = new MemoryStorage();
@@ -220,5 +222,45 @@ test('old blob missing cultivation.boss defaults to 0', () => {
   const loaded = loadSave(store);
   assert.deepEqual(loaded.cultivation, { kill: 16, clear: 15, boss: 0 });
   assert.equal(cultivationTotal(loaded.cultivation), 31);
+});
+test('default unlock is four basics; skill_1 stays locked', () => {
+  assert.deepEqual(DEFAULT_SAVE.unlockedSkillIds, ['light_1', 'light_2', 'light_3', 'heavy_1']);
+  assert.equal(isSkillUnlocked(DEFAULT_SAVE, 'skill_1'), false);
+  const row = SKILL_CATALOG.find((s) => s.skillId === 'skill_1');
+  assert.equal(row.input, 'skill');
+  assert.equal(row.chainNext, null);
+  assert.equal(row.cancelWindowMs, 100);
+  assert.equal(row.hitstopMs, 150);
+  assert.equal(row.damage, 40);
+  assert.equal(row.stun, 200);
+  assert.equal(row.animId, 'skill_1');
+});
+
+test('total >= 80 unlocks skill_1; realm and xiuwei stay off disk', () => {
+  const store = new MemoryStorage();
+  const start = {
+    ...DEFAULT_SAVE,
+    cultivation: { kill: 40, clear: 0, boss: 40 },
+  };
+  persistProgress(start, store);
+  const live = JSON.parse(store.getItem(LIVE_KEY));
+  assert.equal(live.unlockedSkillIds.includes('skill_1'), true);
+  assert.equal(Object.hasOwn(live, 'realm'), false);
+  assert.equal(Object.hasOwn(live.character, 'xiuwei'), false);
+  assert.equal(Object.hasOwn(live, 'skills'), false);
+  const loaded = loadSave(store);
+  assert.equal(isSkillUnlocked(loaded, 'skill_1'), true);
+  assert.equal(cultivationTotal(loaded.cultivation), 80);
+});
+
+test('total 79 does not unlock skill_1; 160 adds no extra id', () => {
+  const store = new MemoryStorage();
+  persistProgress({ ...DEFAULT_SAVE, cultivation: { kill: 24, clear: 15, boss: 40 } }, store);
+  assert.equal(JSON.parse(store.getItem(LIVE_KEY)).unlockedSkillIds.includes('skill_1'), false);
+  persistProgress({ ...DEFAULT_SAVE, cultivation: { kill: 80, clear: 45, boss: 40 } }, store);
+  const ids = JSON.parse(store.getItem(LIVE_KEY)).unlockedSkillIds;
+  assert.equal(ids.includes('skill_1'), true);
+  assert.equal(ids.filter((id) => id === 'skill_1').length, 1);
+  assert.deepEqual(ids.filter((id) => !['light_1','light_2','light_3','heavy_1','skill_1'].includes(id)), []);
 });
 
