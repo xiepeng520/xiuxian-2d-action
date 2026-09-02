@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test": "tsc --outDir .test-out --rootDir src --module es2020 --target es2020 --moduleResolution bundler --skipLibCheck --lib ES2020,DOM src/save/SaveV1.ts && node --test tests/save-v1.test.mjs"
   },
   "dependencies": {
     "phaser": "3.90.0"
