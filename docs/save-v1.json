@@ -20,6 +20,7 @@
   },
   "cultivation": {
     "kill": 0,
-    "clear": 0
+    "clear": 0,
+    "boss": 0
   }
 }
