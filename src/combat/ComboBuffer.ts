@@ -1,4 +1,4 @@
-export type BufferedAction = 'light' | 'heavy' | 'jump';
+export type BufferedAction = 'light' | 'heavy' | 'skill' | 'jump';
 
 interface Slot {
   action: BufferedAction;

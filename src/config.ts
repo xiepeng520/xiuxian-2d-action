@@ -69,3 +69,41 @@ export const STAGE = {
   bossCultivation: 40,
   roomWidth: 1280,
 } as const;
+
+export const SKILL = {
+  duration: 480,
+  activeStart: 160,
+  activeEnd: 280,
+  knockback: 280,
+  hitstop: 150,
+  damage: 40,
+} as const;
+
+export const REALM = {
+  dualAt: 80,
+  tripleAt: 160,
+} as const;
+
+export function realmFromTotal(total: number): 1 | 2 | 3 {
+  if (total >= REALM.tripleAt) {
+    return 3;
+  }
+  if (total >= REALM.dualAt) {
+    return 2;
+  }
+  return 1;
+}
+
+export function realmBarFill(total: number): number {
+  if (total >= REALM.tripleAt) {
+    return 1;
+  }
+  if (total >= REALM.dualAt) {
+    return (total - REALM.dualAt) / (REALM.tripleAt - REALM.dualAt);
+  }
+  return total / REALM.dualAt;
+}
+
+export function scaledDealt(base: number, realm: number): number {
+  return Math.floor(base * (1 + 0.1 * (realm - 1)));
+}

@@ -1,8 +1,8 @@
 import Phaser from 'phaser';
-import { PLAYER, LIGHT_COMBO, HEAVY, COMBAT } from '../config';
+import { PLAYER, LIGHT_COMBO, HEAVY, COMBAT, SKILL, scaledDealt, realmFromTotal } from '../config';
 import { ComboBuffer, type BufferedAction } from '../combat/ComboBuffer';
 import { type CombatState, isAttackState } from '../combat/CombatStateMachine';
-import { type SaveV1Data, isSkillUnlocked, skillById, type SkillV1 } from '../save/SaveV1';
+import { type SaveV1Data, isSkillUnlocked, skillById, type SkillV1, cultivationTotal } from '../save/SaveV1';
 import { SlashFx } from '../combat/SlashFx';
 
 export type PlayerState = CombatState;
@@ -31,7 +31,7 @@ export class Player {
 
   private readonly scene: Phaser.Scene;
   private readonly buffer: ComboBuffer;
-  private readonly save: SaveV1Data;
+  private save: SaveV1Data;
   private readonly keys: {
     left: Phaser.Input.Keyboard.Key;
     right: Phaser.Input.Keyboard.Key;
@@ -42,6 +42,7 @@ export class Player {
     space: Phaser.Input.Keyboard.Key;
     j: Phaser.Input.Keyboard.Key;
     k: Phaser.Input.Keyboard.Key;
+    l: Phaser.Input.Keyboard.Key;
   };
 
   private attackElapsed = 0;
@@ -81,7 +82,12 @@ export class Player {
       space: kb.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE),
       j: kb.addKey(Phaser.Input.Keyboard.KeyCodes.J),
       k: kb.addKey(Phaser.Input.Keyboard.KeyCodes.K),
+      l: kb.addKey(Phaser.Input.Keyboard.KeyCodes.L),
     };
+  }
+
+  bindSave(save: SaveV1Data): void {
+    this.save = save;
   }
 
   get alive(): boolean {
@@ -97,6 +103,12 @@ export class Player {
     }
     if (this.hasHit) {
       return null;
+    }
+    if (this.state === 'skill') {
+      const w = 28;
+      const h = 150;
+      const x = this.facing > 0 ? this.sprite.x + 16 : this.sprite.x - 16 - w;
+      return new Phaser.Geom.Rectangle(x, this.sprite.y - h + 20, w, h);
     }
     const w = this.state === 'heavy' ? 78 : 64;
     const h = 52;
@@ -157,6 +169,9 @@ export class Player {
     }
     if (Phaser.Input.Keyboard.JustDown(this.keys.k)) {
       this.buffer.push('heavy', clock);
+    }
+    if (Phaser.Input.Keyboard.JustDown(this.keys.l)) {
+      this.buffer.push('skill', clock);
     }
     if (
       Phaser.Input.Keyboard.JustDown(this.keys.space) ||
@@ -238,14 +253,14 @@ export class Player {
 
     const cancelAt = this.attack.duration - this.attack.cancelWindowMs;
     if (this.attackElapsed >= cancelAt) {
-      const next = this.buffer.consume(clock, ['light', 'heavy', 'jump']);
+      const next = this.buffer.consume(clock, ['light', 'heavy', 'skill', 'jump']);
       if (next === 'jump' && grounded) {
         this.endAttack(true);
         this.body.setVelocityY(PLAYER.jumpVelocity);
         this.state = 'jump';
         return;
       }
-      if (next === 'light' || next === 'heavy') {
+      if (next === 'light' || next === 'heavy' || next === 'skill') {
         if (this.startAttack(next, true)) {
           return;
         }
@@ -258,7 +273,7 @@ export class Player {
   }
 
   private tryStartAttack(clock: number): boolean {
-    const action = this.buffer.consume(clock, ['light', 'heavy']);
+    const action = this.buffer.consume(clock, ['light', 'heavy', 'skill']);
     if (!action) {
       return false;
     }
@@ -276,8 +291,8 @@ export class Player {
     this.attack = def;
     this.attackElapsed = 0;
     this.hasHit = false;
-    this.state = action === 'heavy' ? 'heavy' : 'light';
-    this.body.setVelocityX(this.facing * PLAYER.attackLunge);
+    this.state = action === 'heavy' ? 'heavy' : action === 'skill' ? 'skill' : 'light';
+    this.body.setVelocityX(this.facing * PLAYER.attackLunge * (action === 'skill' ? 0.35 : 1));
     this.sprite.setFlipX(this.facing < 0);
     return true;
   }
@@ -288,26 +303,31 @@ export class Player {
     this.state = grounded ? 'idle' : 'fall';
   }
 
-  private resolveAttack(action: 'light' | 'heavy', chained: boolean): AttackDef | null {
+  private resolveAttack(action: 'light' | 'heavy' | 'skill', chained: boolean): AttackDef | null {
     const skill = this.pickSkill(action, chained);
+    if (action === 'skill' && !skill) {
+      return null;
+    }
     const cfg = this.timingFor(action, skill);
+    const realm = realmFromTotal(cultivationTotal(this.save.cultivation));
+    const base = skill?.damage ?? cfg.damage;
 
     return {
       duration: cfg.duration,
       activeStart: cfg.activeStart,
       activeEnd: cfg.activeEnd,
-      damage: skill?.damage ?? cfg.damage,
+      damage: scaledDealt(base, realm),
       knockback: cfg.knockback,
       hitstop: skill?.hitstopMs ?? cfg.hitstop,
-      stun: skill?.stun ?? (action === 'heavy' ? 220 : 80),
+      stun: skill?.stun ?? (action === 'heavy' ? 220 : action === 'skill' ? 200 : 80),
       cancelWindowMs: skill?.cancelWindowMs ?? 80,
-      skillId: skill?.skillId ?? (action === 'heavy' ? 'heavy_1' : 'light_1'),
+      skillId: skill?.skillId ?? (action === 'heavy' ? 'heavy_1' : action === 'skill' ? 'skill_1' : 'light_1'),
       chainNext: skill?.chainNext ?? null,
     };
   }
 
   /** From cancel: use chainNext only if unlocked and same input; else first unlocked of that input. */
-  private pickSkill(action: 'light' | 'heavy', chained: boolean): SkillV1 | undefined {
+  private pickSkill(action: 'light' | 'heavy' | 'skill', chained: boolean): SkillV1 | undefined {
     if (chained && this.attack?.chainNext) {
       const nextId = this.attack.chainNext;
       if (isSkillUnlocked(this.save, nextId)) {
@@ -320,13 +340,19 @@ export class Player {
     if (action === 'heavy') {
       return this.unlockedSkill('heavy_1') ?? this.firstUnlocked('heavy');
     }
+    if (action === 'skill') {
+      return this.unlockedSkill('skill_1') ?? this.firstUnlocked('skill');
+    }
     return this.firstUnlocked('light');
   }
 
   private timingFor(
-    action: 'light' | 'heavy',
+    action: 'light' | 'heavy' | 'skill',
     skill: SkillV1 | undefined,
   ): { duration: number; activeStart: number; activeEnd: number; damage: number; knockback: number; hitstop: number } {
+    if (action === 'skill') {
+      return SKILL;
+    }
     if (action === 'heavy') {
       return HEAVY;
     }
@@ -343,7 +369,7 @@ export class Player {
     return skillById(this.save, id);
   }
 
-  private firstUnlocked(input: 'light' | 'heavy'): SkillV1 | undefined {
+  private firstUnlocked(input: 'light' | 'heavy' | 'skill'): SkillV1 | undefined {
     return this.save.skills.find((s) => s.input === input && isSkillUnlocked(this.save, s.skillId));
   }
 

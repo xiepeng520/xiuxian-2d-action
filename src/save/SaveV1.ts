@@ -2,7 +2,7 @@
  * SaveV1 — browser persistence for the 试锋 slice.
  *
  * Unlock source of truth is `unlockedSkillIds` only. `SKILL_CATALOG` is static
- * (numbers/fields unchanged; no skill_1). Runtime hydrates `save.skills` from
+ * (skill_1 unlocks when kill+clear+boss >= 80). Runtime hydrates `save.skills` from
  * the catalog. Disk blobs omit `skills[]`; a leftover array in old blobs is
  * ignored (list still wins).
  *
@@ -108,6 +108,16 @@ export const SKILL_CATALOG: ReadonlyArray<Omit<SkillV1, 'unlock'>> = [
     stun: 220,
     animId: 'heavy_1',
   },
+  {
+    skillId: 'skill_1',
+    input: 'skill',
+    chainNext: null,
+    cancelWindowMs: 100,
+    hitstopMs: 150,
+    damage: 40,
+    stun: 200,
+    animId: 'skill_1',
+  },
 ];
 
 const DEFAULT_UNLOCKED = ['light_1', 'light_2', 'light_3', 'heavy_1'] as const;
@@ -128,6 +138,21 @@ export function cultivationTotal(cultivation: CultivationV1): number {
   return cultivation.kill + cultivation.clear + cultivation.boss;
 }
 
+
+export const SKILL_1_AT = 80;
+
+function withRealmUnlocks(ids: string[], cultivation: CultivationV1): string[] {
+  const next = ids.filter((id) => catalogHas(id));
+  if (cultivationTotal({
+    kill: asInt(cultivation.kill),
+    clear: asInt(cultivation.clear),
+    boss: asInt(cultivation.boss),
+  }) >= SKILL_1_AT && catalogHas('skill_1') && !next.includes('skill_1')) {
+    next.push('skill_1');
+  }
+  return next;
+}
+
 export function assembleSave(
   character: CharacterV1,
   checkpoint: CheckpointV1,
@@ -135,7 +160,7 @@ export function assembleSave(
   cultivation: CultivationV1 = { kill: 0, clear: 0, boss: 0 },
   stageProgress: StageProgressV1 = { stageId: checkpoint.stageId, cleared: false },
 ): SaveV1Data {
-  const ids = [...unlockedSkillIds];
+  const ids = withRealmUnlocks([...unlockedSkillIds], cultivation);
   return {
     saveVersion: 1,
     character: { hp: character.hp, atk: character.atk },

@@ -3,12 +3,13 @@ import Phaser from 'phaser';
 const CYAN = 0xcfe8ff;
 const WHITE = 0xffffff;
 
-/** Rect/circle placeholders for light_1/2/3 and heavy_1. No new textures. */
+/** Rect placeholders: light bars, heavy thick bars, skill_1 vertical qi. No textures. */
 export class SlashFx {
   private readonly scene: Phaser.Scene;
   private readonly barA: Phaser.GameObjects.Rectangle;
   private readonly barB: Phaser.GameObjects.Rectangle;
   private readonly ring: Phaser.GameObjects.Arc;
+  private readonly pillar: Phaser.GameObjects.Rectangle;
   private shook = false;
 
   constructor(scene: Phaser.Scene) {
@@ -16,12 +17,14 @@ export class SlashFx {
     this.barA = scene.add.rectangle(0, 0, 54, 4, CYAN, 0.95).setDepth(12).setVisible(false);
     this.barB = scene.add.rectangle(0, 0, 42, 3, WHITE, 0.85).setDepth(13).setVisible(false);
     this.ring = scene.add.circle(0, 0, 18, CYAN, 0).setStrokeStyle(2, WHITE, 0.9).setDepth(12).setVisible(false);
+    this.pillar = scene.add.rectangle(0, 0, 18, 150, CYAN, 0.92).setDepth(12).setVisible(false);
   }
 
   hide(): void {
     this.barA.setVisible(false);
     this.barB.setVisible(false);
     this.ring.setVisible(false);
+    this.pillar.setVisible(false);
     this.shook = false;
   }
 
@@ -30,6 +33,17 @@ export class SlashFx {
       this.hide();
       return;
     }
+    if (hitstop >= 150) {
+      this.barA.setVisible(false);
+      this.barB.setVisible(false);
+      this.ring.setVisible(false);
+      this.pillar.setFillStyle(CYAN, 0.92);
+      this.pillar.setSize(16, 150);
+      this.pillar.setPosition(x + facing * 42, y - 36);
+      this.pillar.setVisible(true);
+      return;
+    }
+    this.pillar.setVisible(false);
     const heavy = hitstop >= 130;
     const third = hitstop >= 100 && hitstop < 130;
     const thick = heavy ? 10 : 4;

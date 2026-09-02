@@ -1,10 +1,10 @@
 import Phaser from 'phaser';
-import { GAME, STAGE } from '../config';
+import { GAME, STAGE, realmFromTotal } from '../config';
 import { Hitstop } from '../combat/Hitstop';
 import { Player } from '../entities/Player';
 import { Grunt } from '../entities/Grunt';
 import { Hud } from '../ui/Hud';
-import { cultivationTotal, loadSave, persistProgress, type SaveV1Data } from '../save/SaveV1';
+import { cultivationTotal, isSkillUnlocked, loadSave, persistProgress, unlockSkill, type SaveV1Data } from '../save/SaveV1';
 
 const ROOM_W = STAGE.roomWidth;
 const WORLD_W = ROOM_W * 3;
@@ -58,7 +58,7 @@ export class PlayScene extends Phaser.Scene {
       this.save.checkpoint = { stageId: this.save.checkpoint.stageId, spawnId: 'start' };
       this.save.stageProgress = { stageId: this.save.checkpoint.stageId, cleared: false };
       this.save.cultivation = { kill: 0, clear: 0, boss: 0 };
-      persistProgress(this.save);
+      this.commitSave();
       this.scene.restart();
     });
 
@@ -80,11 +80,13 @@ export class PlayScene extends Phaser.Scene {
     this.resolvePlayerHits();
     this.resolveEnemyHits();
     this.tickRooms();
+    const total = cultivationTotal(this.save.cultivation);
     this.hud.refresh(
       this.player,
       this.focusedFoe(),
-      cultivationTotal(this.save.cultivation),
+      total,
       this.save.stageProgress.cleared,
+      isSkillUnlocked(this.save, 'skill_1'),
     );
   }
 
@@ -134,7 +136,7 @@ export class PlayScene extends Phaser.Scene {
         } else {
           this.save.cultivation.kill += STAGE.killCultivation;
         }
-        persistProgress(this.save);
+        this.commitSave();
       }
       return;
     }
@@ -177,9 +179,18 @@ export class PlayScene extends Phaser.Scene {
       if (group.every((f) => f.dead)) {
         this.roomAwarded[i] = true;
         this.save.cultivation.clear += STAGE.clearCultivation;
-        persistProgress(this.save);
+        this.commitSave();
       }
     });
+  }
+
+  private commitSave(): void {
+    persistProgress(this.save);
+    const total = cultivationTotal(this.save.cultivation);
+    if (realmFromTotal(total) >= 2) {
+      this.save = unlockSkill(this.save, 'skill_1');
+      this.player.bindSave(this.save);
+    }
   }
 
   private burst(x: number, y: number): void {
