@@ -4,9 +4,11 @@ import {
   DEFAULT_SAVE,
   LIVE_KEY,
   TMP_KEY,
+  cultivationTotal,
   hydrateSkills,
   isSkillUnlocked,
   loadSave,
+  persistProgress,
   saveSave,
   unlockSkill,
 } from '../.test-out/save/SaveV1.js';
@@ -117,4 +119,47 @@ test('failed live write keeps the previous live blob', () => {
   const live = JSON.parse(store.getItem(LIVE_KEY));
   assert.deepEqual(live.unlockedSkillIds, ['light_1']);
   assert.equal(store.getItem(TMP_KEY) !== null, true);
+});
+
+test('old v1 blobs default cultivation and stageProgress to zeros', () => {
+  const store = new MemoryStorage();
+  store.setItem(
+    LIVE_KEY,
+    JSON.stringify({
+      saveVersion: 1,
+      character: { hp: 100, atk: 10 },
+      checkpoint: { stageId: 'slice_01', spawnId: 'start' },
+      unlockedSkillIds: ['light_1'],
+    }),
+  );
+  const loaded = loadSave(store);
+  assert.deepEqual(loaded.cultivation, { kill: 0, clear: 0 });
+  assert.equal(loaded.stageProgress.cleared, false);
+  assert.equal(cultivationTotal(loaded.cultivation), 0);
+});
+
+test('persistProgress writes kill/clear and does not touch skill ids', () => {
+  const store = new MemoryStorage();
+  const start = loadSave(store);
+  start.cultivation.kill = 8;
+  start.cultivation.clear = 15;
+  start.stageProgress.cleared = true;
+  persistProgress(start, store);
+  const loaded = loadSave(store);
+  assert.deepEqual(loaded.cultivation, { kill: 8, clear: 15 });
+  assert.equal(loaded.stageProgress.cleared, true);
+  assert.deepEqual(loaded.unlockedSkillIds, start.unlockedSkillIds);
+});
+
+test('unlockSkill preserves cultivation', () => {
+  const store = new MemoryStorage();
+  const start = {
+    ...DEFAULT_SAVE,
+    unlockedSkillIds: ['light_1'],
+    skills: hydrateSkills(['light_1']),
+    cultivation: { kill: 8, clear: 0 },
+  };
+  saveSave(start, store);
+  const next = unlockSkill(start, 'heavy_1', store);
+  assert.deepEqual(next.cultivation, { kill: 8, clear: 0 });
 });
