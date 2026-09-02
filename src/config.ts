@@ -38,7 +38,18 @@ export const HEAVY = {
 
 export const ENEMY = {
   maxHp: 80,
-  speed: 40,
-  bodyWidth: 40,
-  bodyHeight: 78,
+  speed: 70,
+  bodyWidth: 52,
+  bodyHeight: 48,
+  attackRange: 150,
+  attackDamage: 12,
+  windupMs: 280,
+  activeMs: 140,
+  recoverMs: 360,
+  flashMs: 33,
+} as const;
+
+export const STAGE = {
+  killCultivation: 8,
+  clearCultivation: 15,
 } as const;
