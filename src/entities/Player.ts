@@ -3,6 +3,7 @@ import { PLAYER, LIGHT_COMBO, HEAVY, COMBAT } from '../config';
 import { ComboBuffer, type BufferedAction } from '../combat/ComboBuffer';
 import { type CombatState, isAttackState } from '../combat/CombatStateMachine';
 import { type SaveV1Data, isSkillUnlocked, skillById, type SkillV1 } from '../save/SaveV1';
+import { SlashFx } from '../combat/SlashFx';
 
 export type PlayerState = CombatState;
 
@@ -48,7 +49,7 @@ export class Player {
   private hasHit = false;
   private hurtMs = 0;
   private comboIdleMs = 0;
-  private slash: Phaser.GameObjects.Image;
+  private readonly fx: SlashFx;
   /** Combat-time clock: paused while scene.time.timeScale === 0 (hitstop). */
   private combatClock = 0;
 
@@ -67,7 +68,7 @@ export class Player {
     this.body.setDragX(1800);
     this.sprite.setCollideWorldBounds(true);
 
-    this.slash = scene.add.image(x, y, 'slash').setVisible(false).setDepth(11);
+    this.fx = new SlashFx(scene);
 
     const kb = scene.input.keyboard!;
     this.keys = {
@@ -127,7 +128,7 @@ export class Player {
     this.hp = Math.max(0, this.hp - damage);
     this.attack = null;
     this.hasHit = false;
-    this.slash.setVisible(false);
+    this.fx.hide();
     this.buffer.clear();
     if (this.hp <= 0) {
       this.state = 'dead';
@@ -182,7 +183,7 @@ export class Player {
     if (this.state === 'hurt') {
       this.hurtMs -= scaled;
       this.body.setAccelerationX(0);
-      this.slash.setVisible(false);
+      this.fx.hide();
       if (this.hurtMs <= 0) {
         this.sprite.clearTint();
         this.state = grounded ? 'idle' : 'fall';
@@ -221,7 +222,7 @@ export class Player {
       this.state = Math.abs(this.body.velocity.x) > 30 && axis !== 0 ? 'run' : 'idle';
     }
 
-    this.slash.setVisible(false);
+    this.fx.hide();
   }
 
   private tickAttack(clock: number, scaled: number, grounded: boolean): void {
@@ -283,7 +284,7 @@ export class Player {
 
   private endAttack(grounded: boolean): void {
     this.attack = null;
-    this.slash.setVisible(false);
+    this.fx.hide();
     this.state = grounded ? 'idle' : 'fall';
   }
 
@@ -360,15 +361,11 @@ export class Player {
 
   private syncSlash(): void {
     if (!this.attack) {
-      this.slash.setVisible(false);
+      this.fx.hide();
       return;
     }
     const active =
       this.attackElapsed >= this.attack.activeStart && this.attackElapsed <= this.attack.activeEnd;
-    this.slash.setVisible(active);
-    this.slash.setPosition(this.sprite.x + this.facing * 36, this.sprite.y - 4);
-    this.slash.setFlipX(this.facing < 0);
-    this.slash.setScale(this.state === 'heavy' ? 1.35 : 1);
-    this.slash.setTint(this.state === 'heavy' ? 0xffd27a : 0xcfe8ff);
+    this.fx.sync(active, this.attack.hitstop, this.sprite.x, this.sprite.y - 4, this.facing);
   }
 }
