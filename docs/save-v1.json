@@ -14,52 +14,6 @@
     "light_3",
     "heavy_1"
   ],
-  "skills": [
-    {
-      "skillId": "light_1",
-      "unlock": true,
-      "input": "light",
-      "chainNext": "light_2",
-      "cancelWindowMs": 80,
-      "hitstopMs": 70,
-      "damage": 12,
-      "stun": 80,
-      "animId": "light_1"
-    },
-    {
-      "skillId": "light_2",
-      "unlock": true,
-      "input": "light",
-      "chainNext": "light_3",
-      "cancelWindowMs": 80,
-      "hitstopMs": 70,
-      "damage": 14,
-      "stun": 90,
-      "animId": "light_2"
-    },
-    {
-      "skillId": "light_3",
-      "unlock": true,
-      "input": "light",
-      "chainNext": null,
-      "cancelWindowMs": 100,
-      "hitstopMs": 100,
-      "damage": 22,
-      "stun": 160,
-      "animId": "light_3"
-    },
-    {
-      "skillId": "heavy_1",
-      "unlock": true,
-      "input": "heavy",
-      "chainNext": null,
-      "cancelWindowMs": 80,
-      "hitstopMs": 130,
-      "damage": 32,
-      "stun": 220,
-      "animId": "heavy_1"
-    }
-  ],
   "stageProgress": {
     "stageId": "slice_01",
     "cleared": false

@@ -163,3 +163,45 @@ test('unlockSkill preserves cultivation', () => {
   const next = unlockSkill(start, 'heavy_1', store);
   assert.deepEqual(next.cultivation, { kill: 8, clear: 0 });
 });
+
+test('disk blob omits skills[]', () => {
+  const store = new MemoryStorage();
+  saveSave(DEFAULT_SAVE, store);
+  const live = JSON.parse(store.getItem(LIVE_KEY));
+  assert.equal(Object.hasOwn(live, 'skills'), false);
+  assert.deepEqual(live.unlockedSkillIds, ['light_1', 'light_2', 'light_3', 'heavy_1']);
+});
+
+test('old blob skills[] is ignored; list and catalog win', () => {
+  const store = new MemoryStorage();
+  store.setItem(
+    LIVE_KEY,
+    JSON.stringify({
+      saveVersion: 1,
+      character: { hp: 100, atk: 10 },
+      checkpoint: { stageId: 'slice_01', spawnId: 'start' },
+      unlockedSkillIds: ['light_1'],
+      skills: [
+        {
+          skillId: 'heavy_1',
+          unlock: true,
+          input: 'heavy',
+          chainNext: null,
+          cancelWindowMs: 1,
+          hitstopMs: 1,
+          damage: 999,
+          stun: 1,
+          animId: 'fake',
+        },
+      ],
+    }),
+  );
+  const loaded = loadSave(store);
+  assert.equal(isSkillUnlocked(loaded, 'heavy_1'), false);
+  assert.equal(isSkillUnlocked(loaded, 'light_1'), true);
+  const heavy = loaded.skills.find((s) => s.skillId === 'heavy_1');
+  assert.equal(heavy.unlock, false);
+  assert.equal(heavy.damage, 32);
+  assert.equal(loaded.skills.some((s) => s.skillId === 'skill_1'), false);
+});
+
