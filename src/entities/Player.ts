@@ -1,9 +1,9 @@
 import Phaser from 'phaser';
-import { PLAYER, LIGHT_COMBO, HEAVY, COMBAT, SKILL, scaledDealt, realmFromTotal } from '../config';
+import { PLAYER, LIGHT_COMBO, SLASH_COMBO, HEAVY, COMBAT, SKILL, scaledDealt, realmFromTotal } from '../config';
 import { ComboBuffer, type BufferedAction } from '../combat/ComboBuffer';
 import { type CombatState, isAttackState } from '../combat/CombatStateMachine';
 import { type SaveV1Data, isSkillUnlocked, skillById, type SkillV1, cultivationTotal } from '../save/SaveV1';
-import { SlashFx } from '../combat/SlashFx';
+import { SlashFx, type SlashStyle } from '../combat/SlashFx';
 
 export type PlayerState = CombatState;
 
@@ -18,6 +18,7 @@ interface AttackDef {
   cancelWindowMs: number;
   skillId: string;
   chainNext: string | null;
+  style: SlashStyle;
 }
 
 export class Player {
@@ -43,6 +44,8 @@ export class Player {
     j: Phaser.Input.Keyboard.Key;
     k: Phaser.Input.Keyboard.Key;
     l: Phaser.Input.Keyboard.Key;
+    s: Phaser.Input.Keyboard.Key;
+    down: Phaser.Input.Keyboard.Key;
   };
 
   private attackElapsed = 0;
@@ -83,6 +86,8 @@ export class Player {
       j: kb.addKey(Phaser.Input.Keyboard.KeyCodes.J),
       k: kb.addKey(Phaser.Input.Keyboard.KeyCodes.K),
       l: kb.addKey(Phaser.Input.Keyboard.KeyCodes.L),
+      s: kb.addKey(Phaser.Input.Keyboard.KeyCodes.S),
+      down: kb.addKey(Phaser.Input.Keyboard.KeyCodes.DOWN),
     };
   }
 
@@ -109,6 +114,13 @@ export class Player {
       const h = 150;
       const x = this.facing > 0 ? this.sprite.x + 16 : this.sprite.x - 16 - w;
       return new Phaser.Geom.Rectangle(x, this.sprite.y - h + 20, w, h);
+    }
+    if (this.attack.skillId.startsWith('slash_')) {
+      const third = this.attack.skillId === 'slash_3';
+      const w = third ? 88 : 70;
+      const h = 36;
+      const x = this.facing > 0 ? this.sprite.x + 8 : this.sprite.x - 8 - w;
+      return new Phaser.Geom.Rectangle(x, this.sprite.y - h * 0.4, w, h);
     }
     const w = this.state === 'heavy' ? 78 : 64;
     const h = 52;
@@ -323,6 +335,7 @@ export class Player {
       cancelWindowMs: skill?.cancelWindowMs ?? 80,
       skillId: skill?.skillId ?? (action === 'heavy' ? 'heavy_1' : action === 'skill' ? 'skill_1' : 'light_1'),
       chainNext: skill?.chainNext ?? null,
+      style: this.styleFor(skill?.skillId ?? (action === 'heavy' ? 'heavy_1' : action === 'skill' ? 'skill_1' : 'light_1')),
     };
   }
 
@@ -343,7 +356,10 @@ export class Player {
     if (action === 'skill') {
       return this.unlockedSkill('skill_1') ?? this.firstUnlocked('skill');
     }
-    return this.firstUnlocked('light');
+    if (!chained && this.downHeld() && this.unlockedSkill('slash_1')) {
+      return this.unlockedSkill('slash_1');
+    }
+    return this.unlockedSkill('light_1') ?? this.firstUnlocked('light');
   }
 
   private timingFor(
@@ -356,10 +372,33 @@ export class Player {
     if (action === 'heavy') {
       return HEAVY;
     }
+    if (skill?.skillId.startsWith('slash_')) {
+      const m = skill.skillId.match(/^slash_(\d+)$/);
+      const idx = m ? Number(m[1]) - 1 : 0;
+      const i = Math.max(0, Math.min(idx, SLASH_COMBO.length - 1));
+      return SLASH_COMBO[i];
+    }
     const match = skill?.skillId.match(/^light_(\d+)$/);
     const idx = match ? Number(match[1]) - 1 : 0;
     const i = Math.max(0, Math.min(idx, LIGHT_COMBO.length - 1));
     return LIGHT_COMBO[i];
+  }
+
+  private styleFor(id: string): SlashStyle {
+    if (id.startsWith('slash_')) {
+      return 'horiz';
+    }
+    if (id === 'skill_1') {
+      return 'qi';
+    }
+    if (id.startsWith('heavy')) {
+      return 'heavy';
+    }
+    return 'vert';
+  }
+
+  private downHeld(): boolean {
+    return this.keys.s.isDown || this.keys.down.isDown;
   }
 
   private unlockedSkill(id: string): SkillV1 | undefined {
@@ -392,6 +431,6 @@ export class Player {
     }
     const active =
       this.attackElapsed >= this.attack.activeStart && this.attackElapsed <= this.attack.activeEnd;
-    this.fx.sync(active, this.attack.hitstop, this.sprite.x, this.sprite.y - 4, this.facing);
+    this.fx.sync(active, this.attack.hitstop, this.sprite.x, this.sprite.y - 4, this.facing, this.attack.style);
   }
 }
