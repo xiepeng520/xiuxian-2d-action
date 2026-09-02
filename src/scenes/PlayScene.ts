@@ -87,6 +87,7 @@ export class PlayScene extends Phaser.Scene {
       total,
       this.save.stageProgress.cleared,
       isSkillUnlocked(this.save, 'skill_1'),
+      isSkillUnlocked(this.save, 'slash_1'),
     );
   }
 
@@ -189,8 +190,13 @@ export class PlayScene extends Phaser.Scene {
     const total = cultivationTotal(this.save.cultivation);
     if (realmFromTotal(total) >= 2) {
       this.save = unlockSkill(this.save, 'skill_1');
-      this.player.bindSave(this.save);
     }
+    if (realmFromTotal(total) >= 3) {
+      for (const id of ['slash_1', 'slash_2', 'slash_3'] as const) {
+        this.save = unlockSkill(this.save, id);
+      }
+    }
+    this.player.bindSave(this.save);
   }
 
   private burst(x: number, y: number): void {

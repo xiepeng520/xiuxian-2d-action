@@ -122,7 +122,7 @@ export class Hud {
       .setDepth(120);
   }
 
-  refresh(player: Player, enemy: Grunt, cultivation: number, cleared: boolean, skillReady: boolean): void {
+  refresh(player: Player, enemy: Grunt, cultivation: number, cleared: boolean, skillReady: boolean, slashReady = false): void {
     const p = Phaser.Math.Clamp(player.hp / player.maxHp, 0, 1);
     this.hpFill.scaleX = p;
     this.hpText.setText(`${Math.ceil(player.hp)}`);
@@ -151,9 +151,14 @@ export class Hud {
     const flashing = this.scene.time.now < this.flashUntil;
     this.realmFill.setFillStyle(flashing ? 0xffffff : 0xcfe8ff, 1);
 
-    const controls = skillReady
-      ? 'WASD / 方向键 移动   空格 跳   J 轻击   K 重击   L 剑气   R 重开'
-      : 'WASD / 方向键 移动   空格 跳   J 轻击   K 重击   R 重开';
+    let controls = 'WASD / 方向键 移动   空格 跳   J 轻击   K 重击';
+    if (skillReady) {
+      controls += '   L 剑气';
+    }
+    if (slashReady) {
+      controls += '   下+J 横斩';
+    }
+    controls += '   R 重开';
     if (player.state === 'dead') {
       this.banner.setText('身陨');
       this.hint.setText('按 R 重开此关');

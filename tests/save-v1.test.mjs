@@ -253,14 +253,30 @@ test('total >= 80 unlocks skill_1; realm and xiuwei stay off disk', () => {
   assert.equal(cultivationTotal(loaded.cultivation), 80);
 });
 
-test('total 79 does not unlock skill_1; 160 adds no extra id', () => {
+test('total 79 does not unlock skill_1; 80 still no slash', () => {
   const store = new MemoryStorage();
   persistProgress({ ...DEFAULT_SAVE, cultivation: { kill: 24, clear: 15, boss: 40 } }, store);
-  assert.equal(JSON.parse(store.getItem(LIVE_KEY)).unlockedSkillIds.includes('skill_1'), false);
+  const at79 = JSON.parse(store.getItem(LIVE_KEY)).unlockedSkillIds;
+  assert.equal(at79.includes('skill_1'), false);
+  assert.equal(at79.includes('slash_1'), false);
+  persistProgress({ ...DEFAULT_SAVE, cultivation: { kill: 40, clear: 0, boss: 40 } }, store);
+  const at80 = JSON.parse(store.getItem(LIVE_KEY)).unlockedSkillIds;
+  assert.equal(at80.includes('skill_1'), true);
+  assert.equal(at80.includes('slash_1'), false);
+});
+
+test('total >= 160 writes slash_1/2/3 once; existing ids unchanged', () => {
+  const store = new MemoryStorage();
   persistProgress({ ...DEFAULT_SAVE, cultivation: { kill: 80, clear: 45, boss: 40 } }, store);
   const ids = JSON.parse(store.getItem(LIVE_KEY)).unlockedSkillIds;
   assert.equal(ids.includes('skill_1'), true);
-  assert.equal(ids.filter((id) => id === 'skill_1').length, 1);
-  assert.deepEqual(ids.filter((id) => !['light_1','light_2','light_3','heavy_1','skill_1'].includes(id)), []);
+  assert.deepEqual(['slash_1', 'slash_2', 'slash_3'].every((id) => ids.includes(id)), true);
+  assert.equal(ids.filter((id) => id.startsWith('slash_')).length, 3);
+  const slash = SKILL_CATALOG.filter((s) => s.skillId.startsWith('slash_'));
+  assert.deepEqual(slash.map((s) => s.damage), [16, 20, 28]);
+  assert.deepEqual(slash.map((s) => s.stun), [90, 110, 180]);
+  assert.deepEqual(slash.map((s) => s.hitstopMs), [70, 70, 100]);
+  const light1 = SKILL_CATALOG.find((s) => s.skillId === 'light_1');
+  assert.equal(light1.damage, 12);
 });
 

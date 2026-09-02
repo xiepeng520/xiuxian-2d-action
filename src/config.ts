@@ -27,6 +27,12 @@ export const LIGHT_COMBO = [
   { duration: 320, activeStart: 90, activeEnd: 200, damage: 22, knockback: 220, hitstop: 100 },
 ] as const;
 
+export const SLASH_COMBO = [
+  { duration: 260, activeStart: 80, activeEnd: 160, damage: 16, knockback: 100, hitstop: COMBAT.lightHitstopMs },
+  { duration: 280, activeStart: 90, activeEnd: 180, damage: 20, knockback: 140, hitstop: COMBAT.lightHitstopMs },
+  { duration: 360, activeStart: 110, activeEnd: 220, damage: 28, knockback: 280, hitstop: 100 },
+] as const;
+
 export const HEAVY = {
   duration: 420,
   activeStart: 140,
