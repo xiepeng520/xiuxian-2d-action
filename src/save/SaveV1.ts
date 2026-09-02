@@ -1,9 +1,10 @@
 /**
  * SaveV1 — browser persistence for the 试锋 slice.
  *
- * Unlock source of truth is `unlockedSkillIds` only. `skills[]` is a static
- * catalog: writes never mutate its structure; load hydrates `unlock` from the
- * id list (list wins if they disagree).
+ * Unlock source of truth is `unlockedSkillIds` only. `SKILL_CATALOG` is static
+ * (numbers/fields unchanged; no skill_1). Runtime hydrates `save.skills` from
+ * the catalog. Disk blobs omit `skills[]`; a leftover array in old blobs is
+ * ignored (list still wins).
  *
  * Cultivation this knife is two integers only: `cultivation.kill` and
  * `cultivation.clear`. They are not a skill tree. Missing fields on old v1
@@ -177,6 +178,7 @@ function parseSave(raw: string): SaveV1Data | null {
       return null;
     }
     const ids = data.unlockedSkillIds.filter((id) => catalogHas(id));
+    // Ignore leftover skills[] on disk; hydrate from SKILL_CATALOG only.
     const cultivation: CultivationV1 = {
       kill: asInt(data.cultivation?.kill),
       clear: asInt(data.cultivation?.clear),
@@ -238,7 +240,7 @@ export function loadSave(store?: Storage | null): SaveV1Data {
     const parsed = parseSave(tmp);
     if (parsed) {
       try {
-        s.setItem(LIVE_KEY, JSON.stringify(parsed));
+        s.setItem(LIVE_KEY, JSON.stringify(toDiskBlob(parsed)));
       } catch {
         // keep tmp; caller still gets a usable save
       }
@@ -248,6 +250,11 @@ export function loadSave(store?: Storage | null): SaveV1Data {
   const fresh = emptySave();
   saveSave(fresh, s);
   return fresh;
+}
+
+function toDiskBlob(save: SaveV1Data): Omit<SaveV1Data, 'skills'> {
+  const { skills: _skills, ...blob } = save;
+  return blob;
 }
 
 export function saveSave(data: SaveV1Data, store?: Storage | null): boolean {
@@ -265,7 +272,7 @@ export function saveSave(data: SaveV1Data, store?: Storage | null): boolean {
     data.cultivation ?? { kill: 0, clear: 0 },
     data.stageProgress ?? { stageId: data.checkpoint.stageId, cleared: false },
   );
-  const json = JSON.stringify(payload);
+  const json = JSON.stringify(toDiskBlob(payload));
   try {
     s.setItem(TMP_KEY, json);
   } catch {
