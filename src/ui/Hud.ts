@@ -119,7 +119,8 @@ export class Hud {
       this.comboText.setText('');
     }
     this.enemyFill.scaleX = Phaser.Math.Clamp(enemy.hp / enemy.maxHp, 0, 1);
-    this.enemyLabel.setText(enemy.dead ? '野修 · 已伏' : '野修');
+    const name = enemy.kind === 'boss' ? '关底' : '野修';
+    this.enemyLabel.setText(enemy.dead ? name + ' · 已伏' : name);
     this.xiuText.setText(`修为 ${cultivation}`);
     if (player.state === 'dead') {
       this.banner.setText('身陨');
