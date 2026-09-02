@@ -122,7 +122,7 @@ export class Hud {
     this.enemyLabel.setText(enemy.dead ? '野修 · 已伏' : '野修');
     this.xiuText.setText(`修为 ${cultivation}`);
     if (player.state === 'dead') {
-      this.banner.setText('身陨');
+      this.banner.setText('身隕');
       this.hint.setText('按 R 重开此关');
     } else if (cleared) {
       this.banner.setText('清场');
