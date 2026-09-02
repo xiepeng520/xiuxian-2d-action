@@ -118,6 +118,36 @@ export const SKILL_CATALOG: ReadonlyArray<Omit<SkillV1, 'unlock'>> = [
     stun: 200,
     animId: 'skill_1',
   },
+  {
+    skillId: 'slash_1',
+    input: 'light',
+    chainNext: 'slash_2',
+    cancelWindowMs: 80,
+    hitstopMs: 70,
+    damage: 16,
+    stun: 90,
+    animId: 'slash_1',
+  },
+  {
+    skillId: 'slash_2',
+    input: 'light',
+    chainNext: 'slash_3',
+    cancelWindowMs: 80,
+    hitstopMs: 70,
+    damage: 20,
+    stun: 110,
+    animId: 'slash_2',
+  },
+  {
+    skillId: 'slash_3',
+    input: 'light',
+    chainNext: null,
+    cancelWindowMs: 100,
+    hitstopMs: 100,
+    damage: 28,
+    stun: 180,
+    animId: 'slash_3',
+  },
 ];
 
 const DEFAULT_UNLOCKED = ['light_1', 'light_2', 'light_3', 'heavy_1'] as const;
@@ -140,15 +170,25 @@ export function cultivationTotal(cultivation: CultivationV1): number {
 
 
 export const SKILL_1_AT = 80;
+export const SLASH_AT = 160;
+const SLASH_IDS = ['slash_1', 'slash_2', 'slash_3'] as const;
 
 function withRealmUnlocks(ids: string[], cultivation: CultivationV1): string[] {
   const next = ids.filter((id) => catalogHas(id));
-  if (cultivationTotal({
+  const total = cultivationTotal({
     kill: asInt(cultivation.kill),
     clear: asInt(cultivation.clear),
     boss: asInt(cultivation.boss),
-  }) >= SKILL_1_AT && catalogHas('skill_1') && !next.includes('skill_1')) {
+  });
+  if (total >= SKILL_1_AT && catalogHas('skill_1') && !next.includes('skill_1')) {
     next.push('skill_1');
+  }
+  if (total >= SLASH_AT) {
+    for (const id of SLASH_IDS) {
+      if (catalogHas(id) && !next.includes(id)) {
+        next.push(id);
+      }
+    }
   }
   return next;
 }
