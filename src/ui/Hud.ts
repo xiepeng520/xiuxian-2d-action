@@ -1,15 +1,17 @@
 import Phaser from 'phaser';
 import { GAME } from '../config';
 import type { Player } from '../entities/Player';
-import type { Dummy } from '../entities/Dummy';
+import type { Grunt } from '../entities/Grunt';
 
 export class Hud {
   private readonly hpFill: Phaser.GameObjects.Rectangle;
   private readonly hpText: Phaser.GameObjects.Text;
   private readonly comboText: Phaser.GameObjects.Text;
   private readonly hint: Phaser.GameObjects.Text;
-  private readonly dummyFill: Phaser.GameObjects.Rectangle;
-  private readonly dummyLabel: Phaser.GameObjects.Text;
+  private readonly enemyFill: Phaser.GameObjects.Rectangle;
+  private readonly enemyLabel: Phaser.GameObjects.Text;
+  private readonly xiuText: Phaser.GameObjects.Text;
+  private readonly banner: Phaser.GameObjects.Text;
 
   constructor(scene: Phaser.Scene) {
     const ui = scene.add.container(0, 0).setScrollFactor(0).setDepth(100);
@@ -50,6 +52,15 @@ export class Hud {
       .setScrollFactor(0)
       .setDepth(101);
 
+    this.xiuText = scene.add
+      .text(40, 98, '修为 0', {
+        fontFamily: 'Noto Serif SC, serif',
+        fontSize: '13px',
+        color: '#c9a227',
+      })
+      .setScrollFactor(0)
+      .setDepth(101);
+
     this.hint = scene.add
       .text(GAME.width / 2, GAME.height - 28, 'WASD / 方向键 移动   空格 跳   J 轻击   K 重击   R 重开', {
         fontFamily: 'Noto Serif SC, serif',
@@ -60,8 +71,8 @@ export class Hud {
       .setScrollFactor(0)
       .setDepth(101);
 
-    this.dummyLabel = scene.add
-      .text(GAME.width - 40, 72, '木桩', {
+    this.enemyLabel = scene.add
+      .text(GAME.width - 40, 72, '野修', {
         fontFamily: 'Noto Serif SC, serif',
         fontSize: '12px',
         color: '#c9a8a8',
@@ -75,14 +86,26 @@ export class Hud {
       .setOrigin(0, 0)
       .setScrollFactor(0)
       .setDepth(100);
-    this.dummyFill = scene.add
+    this.enemyFill = scene.add
       .rectangle(GAME.width - 260, 92, 220, 8, 0x8b1e2d, 1)
       .setOrigin(0, 0)
       .setScrollFactor(0)
       .setDepth(101);
+
+    this.banner = scene.add
+      .text(GAME.width / 2, 160, '', {
+        fontFamily: 'Noto Serif SC, serif',
+        fontSize: '36px',
+        color: '#e8d48b',
+        stroke: '#0a1020',
+        strokeThickness: 6,
+      })
+      .setOrigin(0.5, 0.5)
+      .setScrollFactor(0)
+      .setDepth(120);
   }
 
-  refresh(player: Player, dummy: Dummy): void {
+  refresh(player: Player, enemy: Grunt, cultivation: number, cleared: boolean): void {
     const p = Phaser.Math.Clamp(player.hp / player.maxHp, 0, 1);
     this.hpFill.scaleX = p;
     this.hpText.setText(`${Math.ceil(player.hp)}`);
@@ -95,12 +118,18 @@ export class Hud {
     } else {
       this.comboText.setText('');
     }
-    this.dummyFill.scaleX = Phaser.Math.Clamp(dummy.hp / dummy.maxHp, 0, 1);
-    this.dummyLabel.setText(dummy.dead ? '木桩 · 已破' : '木桩');
-    this.hint.setText(
-      player.state === 'dead'
-        ? '你已身陨 — 按 R 重开此切片'
-        : 'WASD / 方向键 移动   空格 跳   J 轻击   K 重击   R 重开',
-    );
+    this.enemyFill.scaleX = Phaser.Math.Clamp(enemy.hp / enemy.maxHp, 0, 1);
+    this.enemyLabel.setText(enemy.dead ? '野修 · 已伏' : '野修');
+    this.xiuText.setText(`修为 ${cultivation}`);
+    if (player.state === 'dead') {
+      this.banner.setText('身陨');
+      this.hint.setText('按 R 重开此关');
+    } else if (cleared) {
+      this.banner.setText('清场');
+      this.hint.setText('关卡闭环完成 · 按 R 再打一场');
+    } else {
+      this.banner.setText('');
+      this.hint.setText('WASD / 方向键 移动   空格 跳   J 轻击   K 重击   R 重开');
+    }
   }
 }
