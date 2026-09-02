@@ -1,9 +1,10 @@
 import Phaser from 'phaser';
 import { PLAYER, LIGHT_COMBO, HEAVY, COMBAT } from '../config';
 import { ComboBuffer, type BufferedAction } from '../combat/ComboBuffer';
+import { type CombatState, isAttackState } from '../combat/CombatStateMachine';
 import { type SaveV1Data, isSkillUnlocked, skillById, type SkillV1 } from '../save/SaveV1';
 
-export type PlayerState = 'idle' | 'run' | 'jump' | 'fall' | 'light' | 'heavy' | 'hurt' | 'dead';
+export type PlayerState = CombatState;
 
 interface AttackDef {
   duration: number;
@@ -21,7 +22,7 @@ interface AttackDef {
 export class Player {
   readonly sprite: Phaser.Physics.Arcade.Sprite;
   readonly body: Phaser.Physics.Arcade.Body;
-  state: PlayerState = 'idle';
+  state: CombatState = 'idle';
   hp: number;
   maxHp: number;
   comboCount = 0;
@@ -44,12 +45,13 @@ export class Player {
 
   private attackElapsed = 0;
   private attack: AttackDef | null = null;
-  private lightStep = 0;
   private hasHit = false;
   private hurtMs = 0;
   private comboIdleMs = 0;
   private slash: Phaser.GameObjects.Image;
   private readonly atkScale: number;
+  /** Combat-time clock: paused while scene.time.timeScale === 0 (hitstop). */
+  private combatClock = 0;
 
   constructor(scene: Phaser.Scene, x: number, y: number, save: SaveV1Data) {
     this.scene = scene;
@@ -89,7 +91,7 @@ export class Player {
   }
 
   get hitbox(): Phaser.Geom.Rectangle | null {
-    if (!this.attack || (this.state !== 'light' && this.state !== 'heavy')) {
+    if (!this.attack || !isAttackState(this.state)) {
       return null;
     }
     if (this.attackElapsed < this.attack.activeStart || this.attackElapsed > this.attack.activeEnd) {
@@ -143,22 +145,27 @@ export class Player {
     this.sprite.setTint(0xff8888);
   }
 
-  update(time: number, delta: number): void {
-    const scaled = delta * this.scene.time.timeScale;
+  update(_time: number, delta: number): void {
+    const scale = this.scene.time.timeScale;
+    const scaled = delta * scale;
+    if (scale > 0) {
+      this.combatClock += scaled;
+    }
+    const clock = this.combatClock;
     const grounded = this.body.blocked.down || this.body.touching.down;
 
     if (Phaser.Input.Keyboard.JustDown(this.keys.j)) {
-      this.buffer.push('light', time);
+      this.buffer.push('light', clock);
     }
     if (Phaser.Input.Keyboard.JustDown(this.keys.k)) {
-      this.buffer.push('heavy', time);
+      this.buffer.push('heavy', clock);
     }
     if (
       Phaser.Input.Keyboard.JustDown(this.keys.space) ||
       Phaser.Input.Keyboard.JustDown(this.keys.up) ||
       Phaser.Input.Keyboard.JustDown(this.keys.w)
     ) {
-      this.buffer.push('jump', time);
+      this.buffer.push('jump', clock);
     }
 
     if (this.comboCount > 0) {
@@ -166,7 +173,6 @@ export class Player {
       if (this.comboIdleMs > COMBAT.comboResetMs) {
         this.comboCount = 0;
         this.comboIdleMs = 0;
-        this.lightStep = 0;
       }
     }
 
@@ -187,19 +193,19 @@ export class Player {
       return;
     }
 
-    if (this.state === 'light' || this.state === 'heavy') {
-      this.tickAttack(time, scaled, grounded);
+    if (isAttackState(this.state)) {
+      this.tickAttack(clock, scaled, grounded);
       this.syncSlash();
       return;
     }
 
     const axis = this.readAxis();
-    if (grounded && this.buffer.consume(time, ['jump'])) {
+    if (grounded && this.buffer.consume(clock, ['jump'])) {
       this.body.setVelocityY(PLAYER.jumpVelocity);
       this.state = 'jump';
     }
 
-    if (this.tryStartAttack(time)) {
+    if (this.tryStartAttack(clock)) {
       this.syncSlash();
       return;
     }
@@ -221,7 +227,7 @@ export class Player {
     this.slash.setVisible(false);
   }
 
-  private tickAttack(time: number, scaled: number, grounded: boolean): void {
+  private tickAttack(clock: number, scaled: number, grounded: boolean): void {
     if (!this.attack) {
       this.endAttack(grounded);
       return;
@@ -234,7 +240,7 @@ export class Player {
 
     const cancelAt = this.attack.duration - this.attack.cancelWindowMs;
     if (this.attackElapsed >= cancelAt) {
-      const next = this.buffer.consume(time, ['light', 'heavy', 'jump']);
+      const next = this.buffer.consume(clock, ['light', 'heavy', 'jump']);
       if (next === 'jump' && grounded) {
         this.endAttack(true);
         this.body.setVelocityY(PLAYER.jumpVelocity);
@@ -242,7 +248,7 @@ export class Player {
         return;
       }
       if (next === 'light' || next === 'heavy') {
-        if (this.startAttack(next)) {
+        if (this.startAttack(next, true)) {
           return;
         }
       }
@@ -253,19 +259,19 @@ export class Player {
     }
   }
 
-  private tryStartAttack(time: number): boolean {
-    const action = this.buffer.consume(time, ['light', 'heavy']);
+  private tryStartAttack(clock: number): boolean {
+    const action = this.buffer.consume(clock, ['light', 'heavy']);
     if (!action) {
       return false;
     }
-    return this.startAttack(action);
+    return this.startAttack(action, false);
   }
 
-  private startAttack(action: BufferedAction): boolean {
+  private startAttack(action: BufferedAction, chained: boolean): boolean {
     if (action === 'jump') {
       return false;
     }
-    const def = this.resolveAttack(action);
+    const def = this.resolveAttack(action, chained);
     if (!def) {
       return false;
     }
@@ -284,68 +290,52 @@ export class Player {
     this.state = grounded ? 'idle' : 'fall';
   }
 
-  private resolveAttack(action: 'light' | 'heavy'): AttackDef | null {
-    if (action === 'heavy') {
-      const skill = this.unlockedSkill('heavy_1') ?? this.firstUnlocked('heavy');
-      const cfg = HEAVY;
-      return {
-        duration: cfg.duration,
-        activeStart: cfg.activeStart,
-        activeEnd: cfg.activeEnd,
-        damage: this.scaledDamage(skill?.damage ?? cfg.damage),
-        knockback: cfg.knockback,
-        hitstop: skill?.hitstopMs ?? cfg.hitstop,
-        stun: skill?.stun ?? 220,
-        cancelWindowMs: skill?.cancelWindowMs ?? 80,
-        skillId: skill?.skillId ?? 'heavy_1',
-        chainNext: skill?.chainNext ?? null,
-      };
-    }
+  private resolveAttack(action: 'light' | 'heavy', chained: boolean): AttackDef | null {
+    const skill = this.pickSkill(action, chained);
+    const cfg = this.timingFor(action, skill);
 
-    const maxStep = this.maxLightStep();
-    let step = this.lightStep;
-    if (this.comboIdleMs > COMBAT.comboResetMs || this.comboCount === 0) {
-      step = 0;
-    }
-    if (step > maxStep) {
-      step = 0;
-    }
-    const skillId = `light_${step + 1}`;
-    const skill = this.unlockedSkill(skillId);
-    if (step > 0 && !skill) {
-      step = 0;
-    }
-    const cfg = LIGHT_COMBO[Math.min(step, LIGHT_COMBO.length - 1)];
-    const used = this.unlockedSkill(`light_${step + 1}`) ?? this.firstUnlocked('light');
-    this.lightStep = Math.min(step + 1, maxStep + 1);
-    if (this.lightStep > maxStep) {
-      this.lightStep = 0;
-    }
     return {
       duration: cfg.duration,
       activeStart: cfg.activeStart,
       activeEnd: cfg.activeEnd,
-      damage: this.scaledDamage(used?.damage ?? cfg.damage),
+      damage: this.scaledDamage(skill?.damage ?? cfg.damage),
       knockback: cfg.knockback,
-      hitstop: used?.hitstopMs ?? cfg.hitstop,
-      stun: used?.stun ?? 80,
-      cancelWindowMs: used?.cancelWindowMs ?? 80,
-      skillId: used?.skillId ?? skillId,
-      chainNext: used?.chainNext ?? null,
+      hitstop: skill?.hitstopMs ?? cfg.hitstop,
+      stun: skill?.stun ?? (action === 'heavy' ? 220 : 80),
+      cancelWindowMs: skill?.cancelWindowMs ?? 80,
+      skillId: skill?.skillId ?? (action === 'heavy' ? 'heavy_1' : 'light_1'),
+      chainNext: skill?.chainNext ?? null,
     };
   }
 
-  private maxLightStep(): number {
-    let n = 0;
-    for (let i = 0; i < LIGHT_COMBO.length; i++) {
-      const id = `light_${i + 1}`;
-      if (this.unlockedSkill(id) || (i === 0 && this.firstUnlocked('light'))) {
-        n = i;
-      } else {
-        break;
+  /** From cancel: use chainNext only if unlocked and same input; else first unlocked of that input. */
+  private pickSkill(action: 'light' | 'heavy', chained: boolean): SkillV1 | undefined {
+    if (chained && this.attack?.chainNext) {
+      const nextId = this.attack.chainNext;
+      if (isSkillUnlocked(this.save, nextId)) {
+        const next = skillById(this.save, nextId);
+        if (next && next.input === action) {
+          return next;
+        }
       }
     }
-    return n;
+    if (action === 'heavy') {
+      return this.unlockedSkill('heavy_1') ?? this.firstUnlocked('heavy');
+    }
+    return this.firstUnlocked('light');
+  }
+
+  private timingFor(
+    action: 'light' | 'heavy',
+    skill: SkillV1 | undefined,
+  ): { duration: number; activeStart: number; activeEnd: number; damage: number; knockback: number; hitstop: number } {
+    if (action === 'heavy') {
+      return HEAVY;
+    }
+    const match = skill?.skillId.match(/^light_(\d+)$/);
+    const idx = match ? Number(match[1]) - 1 : 0;
+    const i = Math.max(0, Math.min(idx, LIGHT_COMBO.length - 1));
+    return LIGHT_COMBO[i];
   }
 
   private unlockedSkill(id: string): SkillV1 | undefined {

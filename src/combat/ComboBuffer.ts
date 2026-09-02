@@ -5,7 +5,11 @@ interface Slot {
   expiresAt: number;
 }
 
-/** Short-window input buffer so next-hit / jump inputs during animation still register. */
+/**
+ * Short-window input buffer so next-hit / jump inputs during animation still register.
+ * `now` must be a combat clock that does not advance during hitstop, otherwise
+ * buffered inputs expire while timeScale is 0.
+ */
 export class ComboBuffer {
   private slot: Slot | null = null;
   private readonly windowMs: number;
