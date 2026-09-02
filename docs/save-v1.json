@@ -8,7 +8,12 @@
     "stageId": "slice_01",
     "spawnId": "start"
   },
-  "unlockedSkillIds": ["light_1"],
+  "unlockedSkillIds": [
+    "light_1",
+    "light_2",
+    "light_3",
+    "heavy_1"
+  ],
   "skills": [
     {
       "skillId": "light_1",
@@ -23,7 +28,7 @@
     },
     {
       "skillId": "light_2",
-      "unlock": false,
+      "unlock": true,
       "input": "light",
       "chainNext": "light_3",
       "cancelWindowMs": 80,
@@ -34,7 +39,7 @@
     },
     {
       "skillId": "light_3",
-      "unlock": false,
+      "unlock": true,
       "input": "light",
       "chainNext": null,
       "cancelWindowMs": 100,
